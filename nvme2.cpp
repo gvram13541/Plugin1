@@ -257,7 +257,7 @@ public:
             helper_memcpy_1((dest + rounded_size), (src + rounded_size), (param_size - rounded_size));
     }
 
-    static void helper_mempcy_8(float *dest, float *src, size_t param_size)
+    static void helper_memcpy_8(float *dest, float *src, size_t param_size)
     {
         size_t rounded_size = 0;
 
@@ -349,13 +349,14 @@ public:
         }
     };
 
-    virtual deepspeed_pin_tensor_t *get_pin_tensor() override
-    {
-        return new MyPinTensor();
-    }
+    // virtual deepspeed_pin_tensor_t *get_pin_tensor() override
+    // {
+    //     return new MyPinTensor();
+    // }
 
     struct Myio_op_desc_t : public io_op_desc_t
     {
+        // Check Here
         io_op_desc_t::io_op_desc_t(const bool read_op,
                                    const torch::Tensor &buffer,
                                    const int fd,
@@ -379,9 +380,9 @@ public:
             _contiguous_buffer = _cpu_buffer.contiguous();
         }
 
-        char *io_op_desc_t::data_ptr() override const { return (char *)_contiguous_buffer.data_ptr(); }
+        char *data_ptr() override const { return (char *)_contiguous_buffer.data_ptr(); }
 
-        void io_op_desc_t::fini() override
+        void fini() override
         {
             if (_read_op && _buffer.is_cuda())
             {
@@ -402,16 +403,16 @@ public:
 
     }
 
-    virtual io_op_desc_t *
-    create_io_op_desc_t(bool read_op,
-                        const torch::Tensor &buffer,
-                        int fd,
-                        const char *filename,
-                        long long int num_bytes,
-                        bool validate) override
-    {
-        return new Myio_op_desc_t();
-    }
+    // virtual io_op_desc_t *
+    // create_io_op_desc_t(bool read_op,
+    //                     const torch::Tensor &buffer,
+    //                     int fd,
+    //                     const char *filename,
+    //                     long long int num_bytes,
+    //                     bool validate) override
+    // {
+    //     return new Myio_op_desc_t();
+    // }
 
     struct Mydeepspeed_aio_thread_t : public deepspeed_aio_thread_t
     {
@@ -422,14 +423,14 @@ public:
               _time_to_exit(false)
         {
         }
+        // Check destructor
+        ~deepspeed_aio_thread_t() {}
 
-        deepspeed_aio_thread_t::~deepspeed_aio_thread_t() {}
-
-        void deepspeed_aio_thread_t::run() override
+        void run() override
         {
             while (true)
             {
-                std::shared_ptr<struct io_op_desc_t> next_io_op = nullptr;
+                std::shared_ptr<struct Myio_op_desc_t> next_io_op = nullptr;
 
                 {
                     std::unique_lock<std::mutex> lock(_work_sync._mutex);
@@ -475,14 +476,15 @@ public:
             }
         }
 
-        static void _start_aio_thread(std::shared_ptr<struct deepspeed_aio_thread_t> ctxt) { ctxt->run(); }
-    } virtual deepspeed_aio_thread_t *get_aio_thread(const int tid, deepspeed_aio_config_t &aio_config) override
-    {
-        return new Mydeepspeed_aio_thread_t();
-    }
+    } static void _start_aio_thread(std::shared_ptr<struct Mydeepspeed_aio_thread_t> ctxt) { ctxt->run(); }
+    // virtual deepspeed_aio_thread_t *get_aio_thread(const int tid, deepspeed_aio_config_t &aio_config) override
+    // {
+    //     return new Mydeepspeed_aio_thread_t();
+    // }
 
     struct Mydeepspeed_aio_handle_t : public deepspeed_aio_handle_t
     {
+        // Doubt
         deepspeed_aio_handle_t::deepspeed_aio_handle_t(const int block_size,
                                                        const int queue_depth,
                                                        const bool single_submit,
@@ -494,11 +496,11 @@ public:
               _num_threads(num_threads),
               _aio_config(block_size, queue_depth, single_submit, overlap_events, false),
               _num_pending_ops(0),
-              _pinned_tensor_mgr(new deepspeed_pin_tensor_t())
+              _pinned_tensor_mgr(new MyPinTensor())
         {
             for (auto i = 0; i < num_threads; ++i)
             {
-                _thread_contexts.push_back(std::make_shared<deepspeed_aio_thread_t>(i, _aio_config));
+                _thread_contexts.push_back(std::make_shared<Mydeepspeed_aio_thread_t>(i, _aio_config));
             }
 
             for (auto &ctxt : _thread_contexts)
@@ -506,7 +508,7 @@ public:
                 _threads.push_back(std::thread(_start_aio_thread, ctxt));
             }
         }
-
+        // Doubt
         deepspeed_aio_handle_t::~deepspeed_aio_handle_t()
         {
             _stop_threads();
@@ -516,23 +518,23 @@ public:
             }
         }
 
-        const int deepspeed_aio_handle_t::get_block_size() const
+        const int get_block_size() const
         {
             return _aio_ctxt ? _aio_ctxt->_block_size : -1;
         }
 
-        const int deepspeed_aio_handle_t::get_queue_depth() const
+        const int get_queue_depth() const
         {
             return _aio_ctxt ? _aio_ctxt->_queue_depth : -1;
         }
 
-        const bool deepspeed_aio_handle_t::get_single_submit() const { return _single_submit; }
+        const bool get_single_submit() const { return _single_submit; }
 
-        const bool deepspeed_aio_handle_t::get_overlap_events() const { return _overlap_events; }
+        const bool get_overlap_events() const { return _overlap_events; }
 
-        const int deepspeed_aio_handle_t::get_thread_count() const { return _num_threads; }
+        const int get_thread_count() const { return _num_threads; }
 
-        int deepspeed_aio_handle_t::read(torch::Tensor &buffer, const char *filename, const bool validate) override
+        int read(torch::Tensor &buffer, const char *filename, const bool validate) override
         {
             const auto start_time = std::chrono::high_resolution_clock::now();
 
@@ -556,7 +558,7 @@ public:
             }
         }
 
-        int deepspeed_aio_handle_t::wait() override
+        int wait() override
         {
             assert(_num_pending_ops > 0);
             auto num_completed_ops = 0;
@@ -583,8 +585,7 @@ public:
             return num_completed_ops;
         }
 
-        bool deepspeed_aio_handle_t::_is_valid_parallel_aio_op(const bool read_op,
-                                                               const long long int num_bytes) override
+        bool _is_valid_parallel_aio_op(const bool read_op, const long long int num_bytes) override
         {
             const auto op_string = read_op ? "Read" : "Write";
             if (num_bytes % get_thread_count())
@@ -597,10 +598,10 @@ public:
             return true;
         }
 
-        int deepspeed_aio_handle_t::pread(const torch::Tensor &buffer,
-                                          const char *filename,
-                                          const bool validate,
-                                          const bool async) override
+        int pread(const torch::Tensor &buffer,
+                  const char *filename,
+                  const bool validate,
+                  const bool async) override
         {
             long long num_file_bytes;
             if (-1 == get_file_size(filename, num_file_bytes))
@@ -629,7 +630,7 @@ public:
                 return -1;
             }
 
-            auto scheduled_op = std::make_shared<io_op_desc_t>(
+            auto scheduled_op = std::make_shared<Myio_op_desc_t>(
                 true, buffer, fd, filename, (num_file_bytes / _num_threads), validate);
 
             _schedule_aio_work(scheduled_op);
@@ -642,10 +643,10 @@ public:
             return wait();
         }
 
-        int deepspeed_aio_handle_t::pwrite(const torch::Tensor &buffer,
-                                           const char *filename,
-                                           const bool validate,
-                                           const bool async) override
+        int pwrite(const torch::Tensor &buffer,
+                   const char *filename,
+                   const bool validate,
+                   const bool async) override
         {
             const auto num_write_bytes = static_cast<long long int>(buffer.nbytes());
             assert((num_write_bytes % _num_threads) == 0);
@@ -661,7 +662,7 @@ public:
                 return -1;
             }
 
-            auto scheduled_op = std::make_shared<io_op_desc_t>(
+            auto scheduled_op = std::make_shared<Myio_op_desc_t>(
                 false, buffer, fd, filename, (num_write_bytes / _num_threads), validate);
 
             _schedule_aio_work(scheduled_op);
@@ -674,45 +675,45 @@ public:
             return wait();
         }
 
-        int deepspeed_aio_handle_t::sync_pread(torch::Tensor &buffer, const char *filename) override
+        int sync_pread(torch::Tensor &buffer, const char *filename) override
         {
             return pread(buffer, filename, false, false);
         }
 
-        int deepspeed_aio_handle_t::sync_pwrite(const torch::Tensor &buffer, const char *filename) override
+        int sync_pwrite(const torch::Tensor &buffer, const char *filename) override
         {
             return pwrite(buffer, filename, false, false);
         }
 
-        int deepspeed_aio_handle_t::async_pread(torch::Tensor &buffer, const char *filename) override
+        int async_pread(torch::Tensor &buffer, const char *filename) override
         {
             return pread(buffer, filename, false, true);
         }
 
-        int deepspeed_aio_handle_t::async_pwrite(const torch::Tensor &buffer, const char *filename) override
+        int async_pwrite(const torch::Tensor &buffer, const char *filename) override
         {
             return pwrite(buffer, filename, false, true);
         }
 
-        at::Tensor deepspeed_aio_handle_t::new_cpu_locked_tensor(const size_t num_elem,
-                                                                 const torch::Tensor &example_tensor) override
+        at::Tensor new_cpu_locked_tensor(const size_t num_elem,
+                                         const torch::Tensor &example_tensor) override
         {
             return _pinned_tensor_mgr->alloc(num_elem, example_tensor.scalar_type());
         }
 
-        bool deepspeed_aio_handle_t::free_cpu_locked_tensor(torch::Tensor &locked_tensor) override
+        bool free_cpu_locked_tensor(torch::Tensor &locked_tensor) override
         {
             return _pinned_tensor_mgr->free(locked_tensor);
         }
     }
 
-    virtual deepspeed_aio_handle_t *
-    get_aio_handle(const int block_size,
-                   const int queue_depth,
-                   const bool single_submit,
-                   const bool overlap_events,
-                   const int num_threads)
-    {
-        return new Mydeepspeed_aio_handle_t;
-    }
+    // virtual deepspeed_aio_handle_t *
+    // get_aio_handle(const int block_size,
+    //                const int queue_depth,
+    //                const bool single_submit,
+    //                const bool overlap_events,
+    //                const int num_threads)
+    // {
+    //     return new Mydeepspeed_aio_handle_t;
+    // }
 };
